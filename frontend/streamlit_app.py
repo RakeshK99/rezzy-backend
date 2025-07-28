@@ -9,9 +9,10 @@ import webbrowser
 from backend.payments import create_checkout_session
 
 if st.button("Subscribe to Rezzy+"):
-    price_id = "your_stripe_price_id_here"
+    price_id = "price_1RpzUTPYNOHMmUPye2NbA1x5"
     checkout_url = create_checkout_session(price_id)
-    webbrowser.open_new_tab(checkout_url)
+    st.markdown(f"[Click here to subscribe to Rezzy+ 🚀]({checkout_url})", unsafe_allow_html=True)
+    st.stop()
 
 
 st.set_page_config(page_title="Rezzy – Resume Evaluator", layout="centered")
