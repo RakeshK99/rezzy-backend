@@ -1,8 +1,0 @@
-openai
-streamlit
-python-dotenv
-PyMuPDF
-pdfplumber
-docx2txt
-spacy
-stripe
