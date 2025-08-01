@@ -1,0 +1,105 @@
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, relationship
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Database configuration
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./rezzy.db")
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(String, primary_key=True, index=True)  # Clerk user ID
+    email = Column(String, unique=True, index=True)
+    first_name = Column(String)
+    last_name = Column(String)
+    plan = Column(String, default="free")  # free, starter, premium, elite
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    stripe_customer_id = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    # Relationships
+    usage_records = relationship("UsageRecord", back_populates="user")
+    files = relationship("UserFile", back_populates="user")
+    payments = relationship("Payment", back_populates="user")
+
+class UsageRecord(Base):
+    __tablename__ = "usage_records"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"))
+    month = Column(String)  # Format: YYYY-MM
+    scans_used = Column(Integer, default=0)
+    cover_letters_generated = Column(Integer, default=0)
+    interview_questions_generated = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="usage_records")
+
+class UserFile(Base):
+    __tablename__ = "user_files"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"))
+    filename = Column(String)
+    original_filename = Column(String)
+    file_type = Column(String)  # resume, cover_letter, etc.
+    s3_key = Column(String)  # AWS S3 object key
+    file_size = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="files")
+
+class Payment(Base):
+    __tablename__ = "payments"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"))
+    stripe_payment_intent_id = Column(String, unique=True)
+    amount = Column(Integer)  # Amount in cents
+    currency = Column(String, default="usd")
+    plan = Column(String)
+    status = Column(String)  # succeeded, failed, pending
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="payments")
+
+class JobPosting(Base):
+    __tablename__ = "job_postings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String)
+    company = Column(String)
+    location = Column(String)
+    description = Column(Text)
+    requirements = Column(Text)
+    salary_range = Column(String, nullable=True)
+    job_type = Column(String)  # full-time, part-time, contract, etc.
+    experience_level = Column(String)  # entry, mid, senior
+    source = Column(String)  # linkedin, indeed, etc.
+    source_url = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close() 
