@@ -1,4 +1,4 @@
-import PyMuPDF
+import fitz
 import docx2txt
 import os
 from typing import Optional
@@ -6,12 +6,11 @@ from typing import Optional
 def extract_text_from_pdf(file_path: str) -> Optional[str]:
     """Extract text from PDF file using PyMuPDF"""
     try:
-        doc = PyMuPDF.open(file_path)
-        text = ""
-        for page in doc:
-            text += page.get_text()
-        doc.close()
-        return text.strip()
+        with fitz.open(file_path) as doc:
+            text = ""
+            for page in doc:
+                text += page.get_text()
+            return text.strip()
     except Exception as e:
         print(f"Error extracting text from PDF: {e}")
         return None

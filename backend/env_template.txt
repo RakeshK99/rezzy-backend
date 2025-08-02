@@ -3,10 +3,9 @@
 # OpenAI Configuration
 OPENAI_API_KEY=your_openai_api_key_here
 
-# Database Configuration
-DATABASE_URL=postgresql://username:password@localhost:5432/rezzy_db
-# For development, you can use SQLite:
-# DATABASE_URL=sqlite:///./rezzy.db
+# NeonDB Configuration (Better than Supabase for scalability)
+DATABASE_URL=postgresql://username:password@ep-example-123456.us-east-1.aws.neon.tech/rezzy_db?sslmode=require
+# Get this from: https://console.neon.tech/app/projects
 
 # AWS S3 Configuration
 AWS_ACCESS_KEY_ID=your_aws_access_key_id

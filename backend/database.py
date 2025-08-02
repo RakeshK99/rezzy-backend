@@ -1,16 +1,27 @@
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.pool import QueuePool
 from datetime import datetime
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Database configuration
+# Database configuration optimized for NeonDB
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./rezzy.db")
 
-engine = create_engine(DATABASE_URL)
+# Enhanced engine configuration for NeonDB scalability
+engine = create_engine(
+    DATABASE_URL,
+    poolclass=QueuePool,
+    pool_size=10,  # Number of connections to maintain
+    max_overflow=20,  # Additional connections that can be created
+    pool_pre_ping=True,  # Verify connections before use
+    pool_recycle=3600,  # Recycle connections after 1 hour
+    echo=False  # Set to True for SQL debugging
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -28,15 +39,15 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     
     # Relationships
-    usage_records = relationship("UsageRecord", back_populates="user")
-    files = relationship("UserFile", back_populates="user")
-    payments = relationship("Payment", back_populates="user")
+    usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
+    files = relationship("UserFile", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
 
 class UsageRecord(Base):
     __tablename__ = "usage_records"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
     month = Column(String)  # Format: YYYY-MM
     scans_used = Column(Integer, default=0)
     cover_letters_generated = Column(Integer, default=0)
@@ -51,7 +62,7 @@ class UserFile(Base):
     __tablename__ = "user_files"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
     filename = Column(String)
     original_filename = Column(String)
     file_type = Column(String)  # resume, cover_letter, etc.
@@ -66,7 +77,7 @@ class Payment(Base):
     __tablename__ = "payments"
     
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
     stripe_payment_intent_id = Column(String, unique=True)
     amount = Column(Integer)  # Amount in cents
     currency = Column(String, default="usd")
@@ -93,9 +104,6 @@ class JobPosting(Base):
     source_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
-
-# Create tables
-Base.metadata.create_all(bind=engine)
 
 def get_db():
     db = SessionLocal()
