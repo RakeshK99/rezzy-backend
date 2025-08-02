@@ -20,7 +20,6 @@ STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
 # Stripe Price IDs (create these in your Stripe dashboard)
 STRIPE_STARTER_PRICE_ID=price_your_starter_price_id
 STRIPE_PREMIUM_PRICE_ID=price_your_premium_price_id
-STRIPE_ELITE_PRICE_ID=price_your_elite_price_id
 
 # Job Search APIs (Optional)
 RAPID_API_KEY=your_rapid_api_key

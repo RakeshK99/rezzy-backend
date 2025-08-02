@@ -19,11 +19,6 @@ PLAN_PRICES = {
         "price_id": os.getenv('STRIPE_PREMIUM_PRICE_ID'),
         "amount": 1900,  # $19.00 in cents
         "currency": "usd"
-    },
-    "elite": {
-        "price_id": os.getenv('STRIPE_ELITE_PRICE_ID'),
-        "amount": 2900,  # $29.00 in cents
-        "currency": "usd"
     }
 }
 

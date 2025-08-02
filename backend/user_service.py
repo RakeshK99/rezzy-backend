@@ -19,13 +19,36 @@ class UserService:
             # Check if email already exists (for users who might have signed up before)
             existing_email_user = self.db.query(User).filter(User.email == email).first()
             if existing_email_user:
-                # Update the existing user's ID to match the new user_id
-                existing_email_user.id = user_id
-                existing_email_user.first_name = first_name
-                existing_email_user.last_name = last_name
-                existing_email_user.updated_at = datetime.utcnow()
-                self.db.commit()
-                return existing_email_user
+                # If the existing user has a different ID, we need to handle this carefully
+                if existing_email_user.id != user_id:
+                    # Delete existing usage records for the old user ID
+                    self.db.query(UsageRecord).filter(UsageRecord.user_id == existing_email_user.id).delete()
+                    
+                    # Update the existing user's ID to match the new user_id
+                    existing_email_user.id = user_id
+                    existing_email_user.first_name = first_name
+                    existing_email_user.last_name = last_name
+                    existing_email_user.updated_at = datetime.utcnow()
+                    
+                    # Create new usage record for the new user ID
+                    current_month = datetime.utcnow().strftime("%Y-%m")
+                    usage_record = UsageRecord(
+                        user_id=user_id,
+                        month=current_month,
+                        scans_used=0,
+                        cover_letters_generated=0,
+                        interview_questions_generated=0
+                    )
+                    self.db.add(usage_record)
+                    self.db.commit()
+                    return existing_email_user
+                else:
+                    # Same user ID, just update the info
+                    existing_email_user.first_name = first_name
+                    existing_email_user.last_name = last_name
+                    existing_email_user.updated_at = datetime.utcnow()
+                    self.db.commit()
+                    return existing_email_user
             
             # Create new user
             user = User(
@@ -312,7 +335,7 @@ class UserService:
         """Get limits for a specific plan"""
         limits = {
             "free": {
-                "scans_per_month": 3,
+                "scans_per_month": 5,
                 "cover_letters_per_month": 0,
                 "interview_questions_per_month": 0
             },
@@ -322,11 +345,6 @@ class UserService:
                 "interview_questions_per_month": 0
             },
             "premium": {
-                "scans_per_month": -1,  # Unlimited
-                "cover_letters_per_month": -1,  # Unlimited
-                "interview_questions_per_month": -1  # Unlimited
-            },
-            "elite": {
                 "scans_per_month": -1,  # Unlimited
                 "cover_letters_per_month": -1,  # Unlimited
                 "interview_questions_per_month": -1  # Unlimited
