@@ -89,9 +89,18 @@ async def upload_resume(
         if file_size > 10 * 1024 * 1024:  # 10MB
             raise HTTPException(status_code=400, detail="File size too large. Maximum 10MB allowed.")
         
+        # Parse resume text first (before S3 upload)
+        resume_text = parse_resume_from_bytes(content, file.filename)
+        if not resume_text:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Could not extract text from resume. Please ensure your {file.filename} is a valid PDF, DOCX, or DOC file and is not corrupted."
+            )
+        
         # Upload to S3
         import io
         file_data = io.BytesIO(content)
+        file_data.seek(0)  # Reset file pointer
         s3_key = s3_service.upload_file(file_data, file.filename, user_id, "resume")
         
         if not s3_key:
@@ -108,12 +117,6 @@ async def upload_resume(
             file_size
         )
         
-        # Parse resume text
-        file_data.seek(0)  # Reset file pointer
-        resume_text = parse_resume_from_bytes(content, file.filename)
-        if not resume_text:
-            raise HTTPException(status_code=400, detail="Could not extract text from resume")
-        
         # Analyze structure
         structure_analysis = analyze_resume_structure(resume_text)
         
@@ -128,10 +131,14 @@ async def upload_resume(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error in upload_resume: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 def parse_resume_from_bytes(content: bytes, filename: str) -> Optional[str]:
     """Parse resume from bytes content"""
+    temp_path = None
     try:
         # Save to temporary file
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as temp_file:
@@ -141,13 +148,17 @@ def parse_resume_from_bytes(content: bytes, filename: str) -> Optional[str]:
         # Parse resume
         resume_text = parse_resume(temp_path)
         
-        # Clean up
-        os.unlink(temp_path)
-        
         return resume_text
     except Exception as e:
         print(f"Error parsing resume from bytes: {e}")
         return None
+    finally:
+        # Clean up temporary file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+            except Exception as cleanup_error:
+                print(f"Error cleaning up temp file: {cleanup_error}")
 
 @router.post("/api/analyze-job")
 async def analyze_job(job_description: str = Form(...)):
@@ -185,11 +196,22 @@ async def evaluate_resume_endpoint(
         # Analyze job requirements
         job_analysis = analyze_job_requirements(job_description)
         
+        # Save analysis results to database
+        saved_analysis = user_service.save_resume_analysis(
+            user_id=user_id,
+            resume_text=resume_text,
+            job_description=job_description,
+            ai_evaluation=ai_evaluation,
+            keyword_gaps=keyword_gaps,
+            job_analysis=job_analysis
+        )
+        
         # Increment usage
         user_service.increment_usage(user_id, "scan")
         
         return {
             "success": True,
+            "analysis_id": saved_analysis.id if saved_analysis else None,
             "ai_evaluation": ai_evaluation,
             "keyword_gaps": keyword_gaps,
             "job_analysis": job_analysis
@@ -436,6 +458,66 @@ async def get_user_files(
             "files": file_list
         }
         
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/resume-analyses")
+async def get_resume_analyses(
+    user_id: str,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Get user's recent resume analyses"""
+    try:
+        user_service = UserService(db)
+        analyses = user_service.get_resume_analyses(user_id, limit)
+        
+        return {
+            "success": True,
+            "analyses": [
+                {
+                    "id": analysis.id,
+                    "resume_text": analysis.resume_text[:200] + "..." if len(analysis.resume_text) > 200 else analysis.resume_text,
+                    "job_description": analysis.job_description[:200] + "..." if len(analysis.job_description) > 200 else analysis.job_description,
+                    "ai_evaluation": analysis.ai_evaluation,
+                    "keyword_gaps": analysis.keyword_gaps,
+                    "job_analysis": analysis.job_analysis,
+                    "created_at": analysis.created_at.isoformat()
+                }
+                for analysis in analyses
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/resume-analysis/{analysis_id}")
+async def get_resume_analysis(
+    analysis_id: int,
+    user_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get a specific resume analysis"""
+    try:
+        user_service = UserService(db)
+        analysis = user_service.get_resume_analysis(analysis_id, user_id)
+        
+        if not analysis:
+            raise HTTPException(status_code=404, detail="Analysis not found")
+        
+        return {
+            "success": True,
+            "analysis": {
+                "id": analysis.id,
+                "resume_text": analysis.resume_text,
+                "job_description": analysis.job_description,
+                "ai_evaluation": analysis.ai_evaluation,
+                "keyword_gaps": analysis.keyword_gaps,
+                "job_analysis": analysis.job_analysis,
+                "created_at": analysis.created_at.isoformat()
+            }
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

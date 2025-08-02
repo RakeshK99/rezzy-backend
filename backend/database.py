@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import QueuePool
 from datetime import datetime
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -104,6 +105,23 @@ class JobPosting(Base):
     source_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+
+class ResumeAnalysis(Base):
+    __tablename__ = "resume_analyses"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    resume_file_id = Column(Integer, ForeignKey("user_files.id", ondelete="CASCADE"), nullable=True)
+    resume_text = Column(Text)
+    job_description = Column(Text)
+    ai_evaluation = Column(Text)  # JSON string of AI evaluation results
+    keyword_gaps = Column(Text)   # JSON string of keyword gaps
+    job_analysis = Column(Text)   # JSON string of job analysis
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    resume_file = relationship("UserFile")
 
 def get_db():
     db = SessionLocal()
