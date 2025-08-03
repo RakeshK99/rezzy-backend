@@ -23,13 +23,10 @@ app = FastAPI(title="Rezzy API", version="1.0.0")
 router = APIRouter()
 
 # Allow CORS from frontend
+cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "https://rezzy-frontend-seven.vercel.app",
-        "https://*.vercel.app"
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
