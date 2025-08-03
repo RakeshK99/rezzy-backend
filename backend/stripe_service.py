@@ -22,7 +22,7 @@ PLAN_PRICES = {
     }
 }
 
-class StripeService:
+class RezzyStripeService:
     def __init__(self):
         self.stripe = stripe
     
@@ -175,4 +175,4 @@ class StripeService:
             return []
 
 # Global Stripe service instance
-stripe_service = StripeService() 
+stripe_service = RezzyStripeService() 

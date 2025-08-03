@@ -17,7 +17,7 @@ try:
     from resume_parser import parse_resume, analyze_resume_structure
     from job_parser import analyze_job_requirements, find_keyword_gaps
     from s3_service import s3_service
-    from stripe_service import stripe_service
+    from stripe_service import stripe_service as rezzy_stripe_service
     from job_matching import job_matching_service
     print("✅ All modules imported successfully")
 except Exception as e:
@@ -37,7 +37,7 @@ except Exception as e:
     analyze_job_requirements = None
     find_keyword_gaps = None
     s3_service = None
-    stripe_service = None
+    rezzy_stripe_service = None
     job_matching_service = None
 
 app = FastAPI(title="Rezzy API", version="1.0.0")
@@ -327,13 +327,13 @@ async def create_checkout_session(
         
         # Create Stripe customer if doesn't exist
         if not user.stripe_customer_id:
-            customer_id = stripe_service.create_customer(user.email, user_id)
+            customer_id = rezzy_stripe_service.create_customer(user.email, user_id)
             if customer_id:
                 user.stripe_customer_id = customer_id
                 db.commit()
         
         # Create checkout session
-        session_id = stripe_service.create_checkout_session(
+        session_id = rezzy_stripe_service.create_checkout_session(
             user_id, plan, success_url, cancel_url
         )
         
@@ -360,7 +360,7 @@ async def stripe_webhook(request: Request):
         if not sig_header:
             raise HTTPException(status_code=400, detail="Missing stripe-signature header")
         
-        event = stripe_service.handle_webhook(payload, sig_header)
+        event = rezzy_stripe_service.handle_webhook(payload, sig_header)
         
         if not event:
             raise HTTPException(status_code=400, detail="Invalid webhook signature")
@@ -598,13 +598,13 @@ async def get_subscription(user_id: str, db: Session = Depends(get_db)):
         if not user or not user.stripe_customer_id:
             return {"subscription": None, "plan": "free"}
         
-        customer = stripe_service.get_customer(user.stripe_customer_id)
+        customer = rezzy_stripe_service.get_customer(user.stripe_customer_id)
         
         if not customer:
             return {"subscription": None, "plan": "free"}
         
         # Get active subscriptions
-        subscriptions = stripe_service.get_customer_subscriptions(user.stripe_customer_id)
+        subscriptions = rezzy_stripe_service.get_customer_subscriptions(user.stripe_customer_id)
         active_subscription = None
         
         for sub in subscriptions:
@@ -630,11 +630,11 @@ async def cancel_subscription(user_id: str = Form(...), db: Session = Depends(ge
         if not user or not user.stripe_customer_id:
             raise HTTPException(status_code=404, detail="User or subscription not found")
         
-        subscriptions = stripe_service.get_customer_subscriptions(user.stripe_customer_id)
+        subscriptions = rezzy_stripe_service.get_customer_subscriptions(user.stripe_customer_id)
         
         for sub in subscriptions:
             if sub['status'] in ['active', 'trialing']:
-                success = stripe_service.cancel_subscription(sub['id'])
+                success = rezzy_stripe_service.cancel_subscription(sub['id'])
                 if success:
                     # Update user plan to free
                     user_service.update_user_plan(user_id, "free")
@@ -653,7 +653,7 @@ async def upgrade_subscription(
     """Upgrade user's subscription"""
     try:
         print(f"🔧 Upgrade subscription called for user: {user_id}, plan: {new_plan}")
-        print(f"🔧 stripe_service is: {stripe_service}")
+        print(f"🔧 rezzy_stripe_service is: {rezzy_stripe_service}")
         
         user_service = UserService(db)
         user = user_service.get_user(user_id)
@@ -667,7 +667,7 @@ async def upgrade_subscription(
         if not user.stripe_customer_id:
             print(f"🔧 Creating new Stripe customer for user: {user.email}")
             # Create customer first
-            customer_id = stripe_service.create_customer(user.email, user_id)
+            customer_id = rezzy_stripe_service.create_customer(user.email, user_id)
             if customer_id:
                 user_service.update_stripe_customer_id(user_id, customer_id)
                 print(f"🔧 Customer created: {customer_id}")
@@ -679,7 +679,7 @@ async def upgrade_subscription(
         cancel_url = "https://end-seven.vercel.app/dashboard?canceled=true"
         
         print(f"🔧 Creating checkout session...")
-        session_id = stripe_service.create_checkout_session(
+        session_id = rezzy_stripe_service.create_checkout_session(
             user_id, new_plan, success_url, cancel_url
         )
         
