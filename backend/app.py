@@ -575,6 +575,19 @@ def root():
         "environment": os.getenv("ENVIRONMENT", "development")
     }
 
+@router.post("/api/init-database")
+def init_database():
+    """Initialize database tables"""
+    try:
+        from database import Base, engine
+        print("🔨 Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        print("✅ All tables created successfully!")
+        return {"success": True, "message": "Database tables created successfully"}
+    except Exception as e:
+        print(f"❌ Failed to create tables: {e}")
+        return {"success": False, "error": str(e)}
+
 app.include_router(router)
 
 if __name__ == "__main__":
