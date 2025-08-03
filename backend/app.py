@@ -598,7 +598,6 @@ async def get_subscription(user_id: str, db: Session = Depends(get_db)):
         if not user or not user.stripe_customer_id:
             return {"subscription": None, "plan": "free"}
         
-        stripe_service = stripe_service
         customer = stripe_service.get_customer(user.stripe_customer_id)
         
         if not customer:
@@ -631,7 +630,6 @@ async def cancel_subscription(user_id: str = Form(...), db: Session = Depends(ge
         if not user or not user.stripe_customer_id:
             raise HTTPException(status_code=404, detail="User or subscription not found")
         
-        stripe_service = stripe_service
         subscriptions = stripe_service.get_customer_subscriptions(user.stripe_customer_id)
         
         for sub in subscriptions:
@@ -659,8 +657,6 @@ async def upgrade_subscription(
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        
-        stripe_service = stripe_service
         
         # If user has no subscription, create new one
         if not user.stripe_customer_id:
