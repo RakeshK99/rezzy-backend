@@ -1,6 +1,6 @@
 import stripe
 import os
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -11,12 +11,12 @@ stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
 # Plan configurations
 PLAN_PRICES = {
     "starter": {
-        "price_id": os.getenv('STRIPE_STARTER_PRICE_ID'),
+        "price_id": "price_1Rrvh2PYNOHMmUPy4cremMTL",
         "amount": 900,  # $9.00 in cents
         "currency": "usd"
     },
     "premium": {
-        "price_id": os.getenv('STRIPE_PREMIUM_PRICE_ID'),
+        "price_id": "price_1RrvhrPYNOHMmUPy9cN6oF0J",
         "amount": 1900,  # $19.00 in cents
         "currency": "usd"
     }
@@ -151,6 +151,28 @@ class StripeService:
         except Exception as e:
             print(f"Error retrieving customer: {e}")
             return None
+    
+    def get_customer_subscriptions(self, customer_id: str) -> List[Dict[str, Any]]:
+        """Get all subscriptions for a customer"""
+        try:
+            subscriptions = self.stripe.Subscription.list(customer=customer_id)
+            return [
+                {
+                    "id": sub.id,
+                    "status": sub.status,
+                    "current_period_end": sub.current_period_end,
+                    "cancel_at_period_end": sub.cancel_at_period_end,
+                    "items": [
+                        {
+                            "price_id": item.price.id,
+                            "quantity": item.quantity
+                        } for item in sub.items.data
+                    ]
+                } for sub in subscriptions.data
+            ]
+        except Exception as e:
+            print(f"Error getting customer subscriptions: {e}")
+            return []
 
 # Global Stripe service instance
 stripe_service = StripeService() 

@@ -588,6 +588,102 @@ def init_database():
         print(f"❌ Failed to create tables: {e}")
         return {"success": False, "error": str(e)}
 
+@router.get("/api/subscription/{user_id}")
+async def get_subscription(user_id: str, db: Session = Depends(get_db)):
+    """Get user's subscription details"""
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        
+        if not user or not user.stripe_customer_id:
+            return {"subscription": None, "plan": "free"}
+        
+        stripe_service = stripe_service
+        customer = stripe_service.get_customer(user.stripe_customer_id)
+        
+        if not customer:
+            return {"subscription": None, "plan": "free"}
+        
+        # Get active subscriptions
+        subscriptions = stripe_service.get_customer_subscriptions(user.stripe_customer_id)
+        active_subscription = None
+        
+        for sub in subscriptions:
+            if sub['status'] in ['active', 'trialing']:
+                active_subscription = sub
+                break
+        
+        return {
+            "subscription": active_subscription,
+            "plan": user.plan,
+            "customer_id": user.stripe_customer_id
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/cancel-subscription")
+async def cancel_subscription(user_id: str = Form(...), db: Session = Depends(get_db)):
+    """Cancel user's subscription"""
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        
+        if not user or not user.stripe_customer_id:
+            raise HTTPException(status_code=404, detail="User or subscription not found")
+        
+        stripe_service = stripe_service
+        subscriptions = stripe_service.get_customer_subscriptions(user.stripe_customer_id)
+        
+        for sub in subscriptions:
+            if sub['status'] in ['active', 'trialing']:
+                success = stripe_service.cancel_subscription(sub['id'])
+                if success:
+                    # Update user plan to free
+                    user_service.update_user_plan(user_id, "free")
+                    return {"success": True, "message": "Subscription cancelled successfully"}
+        
+        raise HTTPException(status_code=404, detail="No active subscription found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/upgrade-subscription")
+async def upgrade_subscription(
+    user_id: str = Form(...),
+    new_plan: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Upgrade user's subscription"""
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        stripe_service = stripe_service
+        
+        # If user has no subscription, create new one
+        if not user.stripe_customer_id:
+            # Create customer first
+            customer_id = stripe_service.create_customer(user.email, user_id)
+            if customer_id:
+                user_service.update_stripe_customer_id(user_id, customer_id)
+        
+        # Create checkout session for upgrade
+        success_url = f"https://end-seven.vercel.app/dashboard?success=true&plan={new_plan}"
+        cancel_url = "https://end-seven.vercel.app/dashboard?canceled=true"
+        
+        session_id = stripe_service.create_checkout_session(
+            user_id, new_plan, success_url, cancel_url
+        )
+        
+        if session_id:
+            return {"success": True, "session_id": session_id}
+        else:
+            raise HTTPException(status_code=500, detail="Failed to create checkout session")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 app.include_router(router)
 
 if __name__ == "__main__":

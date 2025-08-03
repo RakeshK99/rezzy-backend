@@ -362,4 +362,18 @@ class UserService:
                 "month": datetime.utcnow().strftime("%Y-%m")
             },
             "limits": self._get_plan_limits("free")
-        } 
+        }
+    
+    def update_stripe_customer_id(self, user_id: str, stripe_customer_id: str) -> bool:
+        """Update user's Stripe customer ID"""
+        try:
+            user = self.get_user(user_id)
+            if user:
+                user.stripe_customer_id = stripe_customer_id
+                self.db.commit()
+                return True
+            return False
+        except Exception as e:
+            self.db.rollback()
+            print(f"Error updating Stripe customer ID: {e}")
+            return False 
