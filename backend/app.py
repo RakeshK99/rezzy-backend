@@ -25,7 +25,11 @@ router = APIRouter()
 # Allow CORS from frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://your-domain.com"],  # Add your production domain
+    allow_origins=[
+        "http://localhost:3000", 
+        "https://rezzy-frontend-seven.vercel.app",
+        "https://*.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
