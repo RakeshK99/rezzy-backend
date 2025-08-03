@@ -10,17 +10,42 @@ import uuid
 from datetime import datetime
 
 # Import our modules
-from database import get_db, User, UsageRecord, UserFile, Payment
-from user_service import UserService
-from ai_evaluator import evaluate_resume, generate_cover_letter, generate_interview_questions
-from resume_parser import parse_resume, analyze_resume_structure
-from job_parser import analyze_job_requirements, find_keyword_gaps
-from s3_service import s3_service
-from stripe_service import stripe_service
-from job_matching import job_matching_service
+try:
+    from database import get_db, User, UsageRecord, UserFile, Payment
+    from user_service import UserService
+    from ai_evaluator import evaluate_resume, generate_cover_letter, generate_interview_questions
+    from resume_parser import parse_resume, analyze_resume_structure
+    from job_parser import analyze_job_requirements, find_keyword_gaps
+    from s3_service import s3_service
+    from stripe_service import stripe_service
+    from job_matching import job_matching_service
+    print("✅ All modules imported successfully")
+except Exception as e:
+    print(f"⚠️ Warning: Some modules failed to import: {e}")
+    # Set fallback values for modules that failed to import
+    get_db = None
+    User = None
+    UsageRecord = None
+    UserFile = None
+    Payment = None
+    UserService = None
+    evaluate_resume = None
+    generate_cover_letter = None
+    generate_interview_questions = None
+    parse_resume = None
+    analyze_resume_structure = None
+    analyze_job_requirements = None
+    find_keyword_gaps = None
+    s3_service = None
+    stripe_service = None
+    job_matching_service = None
 
 app = FastAPI(title="Rezzy API", version="1.0.0")
 router = APIRouter()
+
+print("🚀 Rezzy API starting up...")
+print(f"📦 Environment: {os.getenv('ENVIRONMENT', 'development')}")
+print(f"🔧 Debug mode: {os.getenv('DEBUG', 'false')}")
 
 # Allow CORS from frontend
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -543,7 +568,12 @@ def health_check():
 @router.get("/")
 def root():
     """Root endpoint for Railway health check"""
-    return {"message": "Rezzy API is running", "status": "ok"}
+    return {
+        "message": "Rezzy API is running", 
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "environment": os.getenv("ENVIRONMENT", "development")
+    }
 
 app.include_router(router)
 
