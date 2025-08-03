@@ -525,7 +525,25 @@ async def get_resume_analysis(
 @router.get("/api/health")
 def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "service": "Rezzy API", "timestamp": datetime.utcnow().isoformat()}
+    try:
+        # Basic health check without database dependency
+        return {
+            "status": "healthy", 
+            "service": "Rezzy API", 
+            "timestamp": datetime.utcnow().isoformat(),
+            "version": "1.0.0"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+@router.get("/")
+def root():
+    """Root endpoint for Railway health check"""
+    return {"message": "Rezzy API is running", "status": "ok"}
 
 app.include_router(router)
 
