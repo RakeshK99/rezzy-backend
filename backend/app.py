@@ -652,32 +652,45 @@ async def upgrade_subscription(
 ):
     """Upgrade user's subscription"""
     try:
+        print(f"🔧 Upgrade subscription called for user: {user_id}, plan: {new_plan}")
+        print(f"🔧 stripe_service is: {stripe_service}")
+        
         user_service = UserService(db)
         user = user_service.get_user(user_id)
         
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
+        print(f"🔧 User found: {user.email}")
+        
         # If user has no subscription, create new one
         if not user.stripe_customer_id:
+            print(f"🔧 Creating new Stripe customer for user: {user.email}")
             # Create customer first
             customer_id = stripe_service.create_customer(user.email, user_id)
             if customer_id:
                 user_service.update_stripe_customer_id(user_id, customer_id)
+                print(f"🔧 Customer created: {customer_id}")
+            else:
+                print(f"🔧 Failed to create customer")
         
         # Create checkout session for upgrade
         success_url = f"https://end-seven.vercel.app/dashboard?success=true&plan={new_plan}"
         cancel_url = "https://end-seven.vercel.app/dashboard?canceled=true"
         
+        print(f"🔧 Creating checkout session...")
         session_id = stripe_service.create_checkout_session(
             user_id, new_plan, success_url, cancel_url
         )
         
         if session_id:
+            print(f"🔧 Checkout session created: {session_id}")
             return {"success": True, "session_id": session_id}
         else:
+            print(f"🔧 Failed to create checkout session")
             raise HTTPException(status_code=500, detail="Failed to create checkout session")
     except Exception as e:
+        print(f"🔧 Error in upgrade_subscription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 app.include_router(router)
