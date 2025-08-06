@@ -45,9 +45,8 @@ class User(Base):
     job_category = Column(String, nullable=True)  # swe, data_engineering, machine_learning, etc.
     current_resume_id = Column(Integer, ForeignKey("user_files.id"), nullable=True)  # Current active resume
     
-    # Relationships
+    # Relationships - Simplified to avoid conflicts
     usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
-    files = relationship("UserFile", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
     job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
 
@@ -78,8 +77,8 @@ class UserFile(Base):
     file_size = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User", back_populates="files")
+    # Relationships - Simplified to avoid conflicts
+    user = relationship("User")
 
 class Payment(Base):
     __tablename__ = "payments"
