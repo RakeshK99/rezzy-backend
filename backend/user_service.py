@@ -763,6 +763,31 @@ class UserService:
             if not user:
                 return []
             
+            # Try to get real job data first
+            try:
+                from job_matching import job_matching_service
+                if job_matching_service:
+                    # Build search query based on user profile
+                    search_query = self._build_search_query(user)
+                    
+                    # Get real job data
+                    real_jobs = job_matching_service.search_jobs_rapidapi(
+                        query=search_query,
+                        location="",  # Could be made configurable
+                        limit=10
+                    )
+                    
+                    if real_jobs:
+                        # Add match scores and format for frontend
+                        for job in real_jobs:
+                            job['match_score'] = self._calculate_match_score(user, job)
+                            job['id'] = hash(f"{job['title']}{job['company']}") % 1000000  # Simple ID generation
+                        
+                        return real_jobs
+            except Exception as e:
+                print(f"Error getting real job data: {e}")
+                # Fall back to mock data
+            
             # Calculate date range based on time filter
             now = datetime.utcnow()
             if time_filter == "24h":
@@ -776,8 +801,7 @@ class UserService:
             else:
                 start_date = datetime(2020, 1, 1)  # All time
             
-            # For now, return mock job recommendations
-            # In a real implementation, this would query a job database
+            # Fallback to mock job recommendations
             mock_jobs = [
                 {
                     "id": 1,
@@ -815,6 +839,54 @@ class UserService:
         except Exception as e:
             print(f"Error getting job recommendations: {e}")
             return []
+    
+    def _build_search_query(self, user) -> str:
+        """Build search query based on user profile"""
+        query_parts = []
+        
+        if user.job_category:
+            query_parts.append(user.job_category)
+        
+        if user.position_level:
+            query_parts.append(user.position_level)
+        
+        # Add common tech keywords
+        if user.job_category and "software" in user.job_category.lower():
+            query_parts.extend(["developer", "engineer", "programming"])
+        elif user.job_category and "data" in user.job_category.lower():
+            query_parts.extend(["data", "analytics", "machine learning"])
+        elif user.job_category and "ml" in user.job_category.lower():
+            query_parts.extend(["machine learning", "AI", "artificial intelligence"])
+        
+        return " ".join(query_parts) if query_parts else "software engineer"
+    
+    def _calculate_match_score(self, user, job: Dict[str, Any]) -> int:
+        """Calculate match score between user profile and job"""
+        score = 50  # Base score
+        
+        # Match job category
+        if user.job_category and user.job_category.lower() in job.get('title', '').lower():
+            score += 20
+        
+        # Match position level
+        if user.position_level:
+            user_level = user.position_level.lower()
+            job_title = job.get('title', '').lower()
+            
+            if user_level in job_title:
+                score += 15
+            elif user_level == "intern" and "intern" in job_title:
+                score += 15
+            elif user_level == "senior" and "senior" in job_title:
+                score += 15
+            elif user_level == "staff" and "staff" in job_title:
+                score += 15
+        
+        # Bonus for remote jobs
+        if "remote" in job.get('location', '').lower():
+            score += 5
+        
+        return min(score, 100)  # Cap at 100
 
     # Download Resume Method
     def download_resume(self, file_id: int, user_id: str) -> tuple:
