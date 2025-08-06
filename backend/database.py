@@ -44,11 +44,6 @@ class User(Base):
     position_level = Column(String, nullable=True)  # intern, junior, mid, senior, staff, etc.
     job_category = Column(String, nullable=True)  # swe, data_engineering, machine_learning, etc.
     current_resume_id = Column(Integer, ForeignKey("user_files.id"), nullable=True)  # Current active resume
-    
-    # Relationships - Temporarily simplified to avoid conflicts
-    # usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
-    # payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
-    # job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
 
 class UsageRecord(Base):
     __tablename__ = "usage_records"
@@ -61,9 +56,6 @@ class UsageRecord(Base):
     interview_questions_generated = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationships - Temporarily simplified
-    # user = relationship("User", back_populates="usage_records")
 
 class UserFile(Base):
     __tablename__ = "user_files"
@@ -76,9 +68,6 @@ class UserFile(Base):
     s3_key = Column(String)  # AWS S3 object key
     file_size = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships - Simplified to avoid conflicts
-    user = relationship("User")
 
 class Payment(Base):
     __tablename__ = "payments"
@@ -91,9 +80,6 @@ class Payment(Base):
     plan = Column(String)
     status = Column(String)  # succeeded, failed, pending
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships - Temporarily simplified
-    # user = relationship("User", back_populates="payments")
 
 class JobPosting(Base):
     __tablename__ = "job_postings"
@@ -130,10 +116,6 @@ class JobApplication(Base):
     job_description = Column(Text, nullable=True)
     optimized_resume_id = Column(Integer, ForeignKey("user_files.id"), nullable=True)
     match_score = Column(Float, nullable=True)
-    
-    # Relationships - Temporarily simplified
-    # user = relationship("User", back_populates="job_applications")
-    # optimized_resume = relationship("UserFile", foreign_keys=[optimized_resume_id])
 
 class ResumeAnalysis(Base):
     __tablename__ = "resume_analyses"
@@ -147,10 +129,6 @@ class ResumeAnalysis(Base):
     keyword_gaps = Column(Text)   # JSON string of keyword gaps
     job_analysis = Column(Text)   # JSON string of job analysis
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships - Temporarily simplified
-    # user = relationship("User")
-    # resume_file = relationship("UserFile", foreign_keys=[resume_file_id])
 
 class OptimizedResume(Base):
     __tablename__ = "optimized_resumes"
@@ -165,11 +143,6 @@ class OptimizedResume(Base):
     optimization_notes = Column(Text, nullable=True)
     match_score = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships - Temporarily simplified
-    # user = relationship("User")
-    # original_resume = relationship("UserFile", foreign_keys=[original_resume_id])
-    # job_posting = relationship("JobPosting")
 
 class InterviewPreparation(Base):
     __tablename__ = "interview_preparations"
@@ -180,10 +153,6 @@ class InterviewPreparation(Base):
     questions = Column(JSON)  # Array of questions
     answers = Column(JSON)    # Array of suggested answers
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Relationships - Temporarily simplified
-    # user = relationship("User")
-    # job_application = relationship("JobApplication")
 
 def get_db():
     db = SessionLocal()
