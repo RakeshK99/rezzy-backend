@@ -45,10 +45,10 @@ class User(Base):
     job_category = Column(String, nullable=True)  # swe, data_engineering, machine_learning, etc.
     current_resume_id = Column(Integer, ForeignKey("user_files.id"), nullable=True)  # Current active resume
     
-    # Relationships - Simplified to avoid conflicts
-    usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
-    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
-    job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
+    # Relationships - Temporarily simplified to avoid conflicts
+    # usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
+    # payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    # job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
 
 class UsageRecord(Base):
     __tablename__ = "usage_records"
@@ -62,8 +62,8 @@ class UsageRecord(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User", back_populates="usage_records")
+    # Relationships - Temporarily simplified
+    # user = relationship("User", back_populates="usage_records")
 
 class UserFile(Base):
     __tablename__ = "user_files"
@@ -92,8 +92,8 @@ class Payment(Base):
     status = Column(String)  # succeeded, failed, pending
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User", back_populates="payments")
+    # Relationships - Temporarily simplified
+    # user = relationship("User", back_populates="payments")
 
 class JobPosting(Base):
     __tablename__ = "job_postings"
@@ -131,9 +131,9 @@ class JobApplication(Base):
     optimized_resume_id = Column(Integer, ForeignKey("user_files.id"), nullable=True)
     match_score = Column(Float, nullable=True)
     
-    # Relationships
-    user = relationship("User", back_populates="job_applications")
-    optimized_resume = relationship("UserFile", foreign_keys=[optimized_resume_id])
+    # Relationships - Temporarily simplified
+    # user = relationship("User", back_populates="job_applications")
+    # optimized_resume = relationship("UserFile", foreign_keys=[optimized_resume_id])
 
 class ResumeAnalysis(Base):
     __tablename__ = "resume_analyses"
@@ -148,9 +148,9 @@ class ResumeAnalysis(Base):
     job_analysis = Column(Text)   # JSON string of job analysis
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User")
-    resume_file = relationship("UserFile", foreign_keys=[resume_file_id])
+    # Relationships - Temporarily simplified
+    # user = relationship("User")
+    # resume_file = relationship("UserFile", foreign_keys=[resume_file_id])
 
 class OptimizedResume(Base):
     __tablename__ = "optimized_resumes"
@@ -166,10 +166,10 @@ class OptimizedResume(Base):
     match_score = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User")
-    original_resume = relationship("UserFile", foreign_keys=[original_resume_id])
-    job_posting = relationship("JobPosting")
+    # Relationships - Temporarily simplified
+    # user = relationship("User")
+    # original_resume = relationship("UserFile", foreign_keys=[original_resume_id])
+    # job_posting = relationship("JobPosting")
 
 class InterviewPreparation(Base):
     __tablename__ = "interview_preparations"
@@ -181,9 +181,9 @@ class InterviewPreparation(Base):
     answers = Column(JSON)    # Array of suggested answers
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
-    user = relationship("User")
-    job_application = relationship("JobApplication")
+    # Relationships - Temporarily simplified
+    # user = relationship("User")
+    # job_application = relationship("JobApplication")
 
 def get_db():
     db = SessionLocal()
