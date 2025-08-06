@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.pool import QueuePool
@@ -32,6 +32,7 @@ class User(Base):
     id = Column(String, primary_key=True, index=True)  # Clerk user ID
     email = Column(String, unique=True, index=True)
     first_name = Column(String)
+    middle_name = Column(String, nullable=True)  # New field for middle name
     last_name = Column(String)
     plan = Column(String, default="free")  # free, starter, premium, elite
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -39,10 +40,17 @@ class User(Base):
     stripe_customer_id = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     
+    # Profile fields
+    position_level = Column(String, nullable=True)  # intern, junior, mid, senior, staff, etc.
+    job_category = Column(String, nullable=True)  # swe, data_engineering, machine_learning, etc.
+    current_resume_id = Column(Integer, ForeignKey("user_files.id"), nullable=True)  # Current active resume
+    
     # Relationships
     usage_records = relationship("UsageRecord", back_populates="user", cascade="all, delete-orphan")
     files = relationship("UserFile", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
+    current_resume = relationship("UserFile", foreign_keys=[current_resume_id])
 
 class UsageRecord(Base):
     __tablename__ = "usage_records"
@@ -106,6 +114,29 @@ class JobPosting(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
 
+class JobApplication(Base):
+    __tablename__ = "job_applications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    job_title = Column(String)
+    company = Column(String)
+    location = Column(String, nullable=True)
+    job_url = Column(String, nullable=True)
+    application_status = Column(String, default="applied")  # applied, phone_screen, onsite, offer, rejected
+    application_date = Column(DateTime, default=datetime.utcnow)
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    notes = Column(Text, nullable=True)
+    
+    # Job details for optimization
+    job_description = Column(Text, nullable=True)
+    optimized_resume_id = Column(Integer, ForeignKey("user_files.id"), nullable=True)
+    match_score = Column(Float, nullable=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="job_applications")
+    optimized_resume = relationship("UserFile")
+
 class ResumeAnalysis(Base):
     __tablename__ = "resume_analyses"
     
@@ -122,6 +153,39 @@ class ResumeAnalysis(Base):
     # Relationships
     user = relationship("User")
     resume_file = relationship("UserFile")
+
+class OptimizedResume(Base):
+    __tablename__ = "optimized_resumes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    original_resume_id = Column(Integer, ForeignKey("user_files.id", ondelete="CASCADE"))
+    job_posting_id = Column(Integer, ForeignKey("job_postings.id", ondelete="CASCADE"), nullable=True)
+    job_title = Column(String)
+    company = Column(String)
+    optimized_content = Column(Text)
+    optimization_notes = Column(Text, nullable=True)
+    match_score = Column(Float, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    original_resume = relationship("UserFile", foreign_keys=[original_resume_id])
+    job_posting = relationship("JobPosting")
+
+class InterviewPreparation(Base):
+    __tablename__ = "interview_preparations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"))
+    job_application_id = Column(Integer, ForeignKey("job_applications.id", ondelete="CASCADE"))
+    questions = Column(JSON)  # Array of questions
+    answers = Column(JSON)    # Array of suggested answers
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User")
+    job_application = relationship("JobApplication")
 
 def get_db():
     db = SessionLocal()

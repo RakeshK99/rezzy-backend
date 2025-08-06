@@ -190,6 +190,47 @@ def generate_interview_questions(resume_text: str, job_description: str) -> List
     except Exception as e:
         return [f"Error generating questions: {e}"]
 
+def optimize_resume_for_job(resume_text: str, job_description: str, job_requirements: str = "") -> str:
+    """Optimize resume content for a specific job without adding false information"""
+    
+    prompt = f"""
+    You are an expert resume writer. Optimize the following resume for the specific job description and requirements.
+    
+    IMPORTANT: Do NOT add any false information, made-up experiences, or skills that are not already present in the original resume. 
+    Only reorganize, rephrase, and emphasize existing content to better match the job requirements.
+    
+    Job Description:
+    {job_description}
+    
+    Job Requirements:
+    {job_requirements}
+    
+    Original Resume:
+    {resume_text}
+    
+    Please optimize the resume by:
+    1. Reorganizing sections to highlight relevant experience first
+    2. Rephrasing bullet points to include relevant keywords from the job description
+    3. Emphasizing achievements and experiences that match the job requirements
+    4. Improving the overall structure and flow
+    5. Making sure all content is factual and based on the original resume
+    
+    Return the optimized resume content in a clean, professional format.
+    Do not add any explanations or notes - just return the optimized resume text.
+    """
+
+    try:
+        chat_completion = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+        )
+        
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        print(f"Error optimizing resume: {e}")
+        return resume_text  # Return original if optimization fails
+
 if __name__ == "__main__":
     resume_text = "Experienced Python developer with strong data analysis skills. Proficient in SQL and cloud tools."
     job_description = "We are looking for someone with experience in Python, AWS, machine learning, and communication skills."

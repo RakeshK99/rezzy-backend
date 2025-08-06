@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 import os
 import tempfile
 import json
+import io
 from typing import Optional
 import uuid
 from datetime import datetime
@@ -76,20 +77,26 @@ async def create_user(
     user_id: str = Form(...),
     email: str = Form(...),
     first_name: str = Form(""),
+    middle_name: str = Form(""),
     last_name: str = Form(""),
     db: Session = Depends(get_db)
 ):
     """Create a new user (called when user signs up)"""
     try:
         user_service = UserService(db)
-        user = user_service.create_user(user_id, email, first_name, last_name)
+        user = user_service.create_user(user_id, email, first_name, middle_name, last_name)
         
         return {
             "success": True,
             "user": {
                 "id": user.id,
                 "email": user.email,
-                "plan": user.plan
+                "first_name": user.first_name,
+                "middle_name": user.middle_name,
+                "last_name": user.last_name,
+                "plan": user.plan,
+                "position_level": user.position_level,
+                "job_category": user.job_category
             }
         }
     except Exception as e:
@@ -143,6 +150,14 @@ async def upload_resume(
             file_size
         )
         
+        # Set as current resume
+        if user_file:
+            user = user_service.get_user(user_id)
+            if user:
+                user.current_resume_id = user_file.id
+                user.updated_at = datetime.utcnow()
+                db.commit()
+        
         # Analyze structure
         structure_analysis = analyze_resume_structure(resume_text)
         
@@ -161,6 +176,45 @@ async def upload_resume(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@router.post("/api/set-current-resume")
+async def set_current_resume(
+    user_id: str = Form(...),
+    resume_id: int = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Set a resume as the current active resume for the user"""
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Verify the resume belongs to the user
+        resume_file = user_service.db.query(UserFile).filter(
+            UserFile.id == resume_id,
+            UserFile.user_id == user_id,
+            UserFile.file_type == "resume"
+        ).first()
+        
+        if not resume_file:
+            raise HTTPException(status_code=404, detail="Resume not found")
+        
+        # Set as current resume
+        user.current_resume_id = resume_id
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Current resume updated successfully",
+            "resume_id": resume_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error setting current resume: {e}")
+        raise HTTPException(status_code=500, detail="Failed to set current resume")
 
 def parse_resume_from_bytes(content: bytes, filename: str) -> Optional[str]:
     """Parse resume from bytes content"""
@@ -425,34 +479,60 @@ async def search_jobs(
 
 @router.post("/api/match-jobs")
 async def match_jobs(
-    resume_text: str = Form(...),
-    job_description: str = Form(...),
-    location: str = Form(""),
-    limit: int = Form(10),
     user_id: str = Form(...),
+    time_filter: str = Form("1w"),
     db: Session = Depends(get_db)
 ):
-    """Match resume to relevant jobs (Premium feature)"""
+    """Get job recommendations based on user profile"""
+    try:
+        user_service = UserService(db)
+        jobs = user_service.get_job_recommendations(user_id, time_filter)
+        return {"success": True, "jobs": jobs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/job-recommendations/{user_id}")
+async def get_job_recommendations(
+    user_id: str,
+    time_filter: str = "1w",
+    db: Session = Depends(get_db)
+):
+    """Get job recommendations based on user profile"""
     try:
         user_service = UserService(db)
         user = user_service.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
         
-        if not user or user.plan == "free":
-            raise HTTPException(status_code=403, detail="Job matching is a premium feature")
+        # Get user's current resume if available
+        current_resume_text = None
+        if user.current_resume_id:
+            resume_file = user_service.db.query(UserFile).filter(UserFile.id == user.current_resume_id).first()
+            if resume_file:
+                # Download resume content from S3
+                try:
+                    resume_content = s3_service.download_file(resume_file.s3_key)
+                    current_resume_text = parse_resume_from_bytes(resume_content, resume_file.filename)
+                except Exception as e:
+                    print(f"Error downloading resume: {e}")
         
-        matched_jobs = job_matching_service.match_resume_to_jobs(
-            resume_text, job_description, location, limit
-        )
+        # Get job recommendations
+        recommendations = user_service.get_job_recommendations(user_id, time_filter)
         
         return {
-            "success": True,
-            "jobs": matched_jobs
+            "user_profile": {
+                "position_level": user.position_level,
+                "job_category": user.job_category,
+                "has_resume": bool(current_resume_text)
+            },
+            "recommendations": recommendations,
+            "time_filter": time_filter
         }
-        
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error getting job recommendations: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get job recommendations")
 
 @router.get("/api/user-files")
 async def get_user_files(
@@ -650,7 +730,7 @@ async def upgrade_subscription(
     new_plan: str = Form(...),
     db: Session = Depends(get_db)
 ):
-    """Upgrade user's subscription"""
+    """Upgrade user subscription"""
     try:
         print(f"🔧 Upgrade subscription called for user: {user_id}, plan: {new_plan}")
         print(f"🔧 rezzy_stripe_service is: {rezzy_stripe_service}")
@@ -691,6 +771,309 @@ async def upgrade_subscription(
             raise HTTPException(status_code=500, detail="Failed to create checkout session")
     except Exception as e:
         print(f"🔧 Error in upgrade_subscription: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# New Profile Management Endpoints
+@router.get("/api/profile/{user_id}")
+async def get_profile(user_id: str, db: Session = Depends(get_db)):
+    """Get user profile information"""
+    try:
+        user_service = UserService(db)
+        profile = user_service.get_user_profile(user_id)
+        return profile
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/user-profile/{user_id}")
+async def get_user_profile(user_id: str, db: Session = Depends(get_db)):
+    """Get complete user profile with all information"""
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Get current resume if exists
+        current_resume = None
+        if user.current_resume_id:
+            resume_file = user_service.db.query(UserFile).filter(UserFile.id == user.current_resume_id).first()
+            if resume_file:
+                current_resume = {
+                    "id": resume_file.id,
+                    "filename": resume_file.filename,
+                    "original_filename": resume_file.original_filename,
+                    "created_at": resume_file.created_at.isoformat()
+                }
+        
+        return {
+            "id": user.id,
+            "email": user.email,
+            "first_name": user.first_name,
+            "middle_name": user.middle_name,
+            "last_name": user.last_name,
+            "plan": user.plan,
+            "position_level": user.position_level,
+            "job_category": user.job_category,
+            "current_resume": current_resume,
+            "created_at": user.created_at.isoformat(),
+            "updated_at": user.updated_at.isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/update-profile")
+async def update_profile(
+    user_id: str = Form(...),
+    first_name: str = Form(...),
+    middle_name: str = Form(""),
+    last_name: str = Form(...),
+    position_level: str = Form(""),
+    job_category: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    """Update user profile information"""
+    try:
+        user_service = UserService(db)
+        user_service.update_profile(user_id, first_name, middle_name, last_name, position_level, job_category)
+        return {"success": True, "message": "Profile updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Job Application Management Endpoints
+@router.get("/api/job-applications/{user_id}")
+async def get_job_applications(user_id: str, db: Session = Depends(get_db)):
+    """Get user's job applications"""
+    try:
+        user_service = UserService(db)
+        applications = user_service.get_job_applications(user_id)
+        return {"applications": applications}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/job-applications")
+async def create_job_application(
+    user_id: str = Form(...),
+    job_title: str = Form(...),
+    company: str = Form(...),
+    location: str = Form(""),
+    job_url: str = Form(""),
+    notes: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    """Create a new job application"""
+    try:
+        user_service = UserService(db)
+        application = user_service.create_job_application(user_id, job_title, company, location, job_url, notes)
+        return {"success": True, "application": application}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/api/job-applications/{application_id}")
+async def update_job_application(
+    application_id: int,
+    user_id: str = Form(...),
+    job_title: str = Form(...),
+    company: str = Form(...),
+    location: str = Form(""),
+    job_url: str = Form(""),
+    notes: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    """Update a job application"""
+    try:
+        user_service = UserService(db)
+        application = user_service.update_job_application(application_id, user_id, job_title, company, location, job_url, notes)
+        return {"success": True, "application": application}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/api/job-applications/{application_id}/status")
+async def update_application_status(
+    application_id: int,
+    user_id: str = Form(...),
+    status: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Update job application status"""
+    try:
+        user_service = UserService(db)
+        application = user_service.update_application_status(application_id, user_id, status)
+        return {"success": True, "application": application}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/api/job-applications/{application_id}")
+async def delete_job_application(
+    application_id: int,
+    user_id: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Delete a job application"""
+    try:
+        user_service = UserService(db)
+        user_service.delete_job_application(application_id, user_id)
+        return {"success": True, "message": "Application deleted successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Optimized Resume Endpoints
+@router.get("/api/optimized-resumes/{user_id}")
+async def get_optimized_resumes(user_id: str, db: Session = Depends(get_db)):
+    """Get user's optimized resumes"""
+    try:
+        user_service = UserService(db)
+        resumes = user_service.get_optimized_resumes(user_id)
+        return {"resumes": resumes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/optimize-resume")
+async def optimize_resume(
+    user_id: str = Form(...),
+    job_title: str = Form(...),
+    company: str = Form(...),
+    job_description: str = Form(...),
+    job_requirements: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Optimize resume for a specific job"""
+    try:
+        user_service = UserService(db)
+        optimized_resume = user_service.optimize_resume(user_id, job_title, company, job_description, job_requirements)
+        return {"success": True, "optimized_resume": optimized_resume}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/generate-optimized-resume")
+async def generate_optimized_resume(
+    user_id: str = Form(...),
+    job_title: str = Form(...),
+    company: str = Form(...),
+    job_description: str = Form(...),
+    job_requirements: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Generate an optimized resume for a specific job posting"""
+    try:
+        user_service = UserService(db)
+        user = user_service.get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Get user's current resume
+        if not user.current_resume_id:
+            raise HTTPException(status_code=400, detail="No resume uploaded. Please upload a resume first.")
+        
+        resume_file = user_service.db.query(UserFile).filter(UserFile.id == user.current_resume_id).first()
+        if not resume_file:
+            raise HTTPException(status_code=404, detail="Current resume not found")
+        
+        # Download resume content from S3
+        try:
+            resume_content = s3_service.download_file(resume_file.s3_key)
+            original_resume_text = parse_resume_from_bytes(resume_content, resume_file.filename)
+        except Exception as e:
+            print(f"Error downloading resume: {e}")
+            raise HTTPException(status_code=500, detail="Failed to download resume")
+        
+        if not original_resume_text:
+            raise HTTPException(status_code=400, detail="Could not parse resume content")
+        
+        # Generate optimized resume using AI
+        try:
+            from ai_evaluator import optimize_resume_for_job
+            optimized_content = optimize_resume_for_job(original_resume_text, job_description, job_requirements)
+        except Exception as e:
+            print(f"Error optimizing resume: {e}")
+            raise HTTPException(status_code=500, detail="Failed to optimize resume")
+        
+        # Save optimized resume
+        optimized_filename = f"optimized_{job_title.replace(' ', '_')}_{company.replace(' ', '_')}.pdf"
+        s3_key = f"optimized_resumes/{user_id}/{optimized_filename}"
+        
+        # Convert optimized content to PDF (you'll need to implement this)
+        # For now, we'll save as text
+        optimized_content_bytes = optimized_content.encode('utf-8')
+        s3_service.upload_file(optimized_content_bytes, s3_key)
+        
+        # Save to database
+        optimized_file = user_service.save_user_file(
+            user_id=user_id,
+            filename=optimized_filename,
+            original_filename=optimized_filename,
+            file_type="optimized_resume",
+            s3_key=s3_key,
+            file_size=len(optimized_content_bytes)
+        )
+        
+        return {
+            "success": True,
+            "optimized_resume_id": optimized_file.id,
+            "filename": optimized_filename,
+            "message": "Optimized resume generated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating optimized resume: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate optimized resume")
+
+@router.get("/api/download-optimized-resume/{resume_id}")
+async def download_optimized_resume(resume_id: int, user_id: str, db: Session = Depends(get_db)):
+    """Download optimized resume as PDF"""
+    try:
+        user_service = UserService(db)
+        pdf_content = user_service.generate_optimized_resume_pdf(resume_id, user_id)
+        return FileResponse(
+            io.BytesIO(pdf_content),
+            media_type='application/pdf',
+            filename=f'optimized_resume_{resume_id}.pdf'
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Interview Preparation Endpoints
+@router.get("/api/interview-preparations/{user_id}")
+async def get_interview_preparations(user_id: str, db: Session = Depends(get_db)):
+    """Get user's interview preparations"""
+    try:
+        user_service = UserService(db)
+        preparations = user_service.get_interview_preparations(user_id)
+        return {"preparations": preparations}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/generate-interview-prep")
+async def generate_interview_prep(
+    user_id: str = Form(...),
+    job_application_id: str = Form(...),
+    job_title: str = Form(...),
+    company: str = Form(...),
+    job_description: str = Form(""),
+    db: Session = Depends(get_db)
+):
+    """Generate interview preparation for a job application"""
+    try:
+        user_service = UserService(db)
+        preparation = user_service.generate_interview_preparation(user_id, job_application_id, job_title, company, job_description)
+        return {"success": True, "preparation": preparation}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Download Resume Endpoint
+@router.get("/api/download-resume/{file_id}")
+async def download_resume(file_id: int, user_id: str, db: Session = Depends(get_db)):
+    """Download user's resume file"""
+    try:
+        user_service = UserService(db)
+        file_content, filename = user_service.download_resume(file_id, user_id)
+        return FileResponse(
+            io.BytesIO(file_content),
+            media_type='application/octet-stream',
+            filename=filename
+        )
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 app.include_router(router)
