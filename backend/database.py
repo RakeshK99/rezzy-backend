@@ -50,7 +50,6 @@ class User(Base):
     files = relationship("UserFile", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
     job_applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
-    current_resume = relationship("UserFile", foreign_keys=[current_resume_id])
 
 class UsageRecord(Base):
     __tablename__ = "usage_records"
