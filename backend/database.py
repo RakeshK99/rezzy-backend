@@ -134,7 +134,7 @@ class JobApplication(Base):
     
     # Relationships
     user = relationship("User", back_populates="job_applications")
-    optimized_resume = relationship("UserFile")
+    optimized_resume = relationship("UserFile", foreign_keys=[optimized_resume_id])
 
 class ResumeAnalysis(Base):
     __tablename__ = "resume_analyses"
@@ -151,7 +151,7 @@ class ResumeAnalysis(Base):
     
     # Relationships
     user = relationship("User")
-    resume_file = relationship("UserFile")
+    resume_file = relationship("UserFile", foreign_keys=[resume_file_id])
 
 class OptimizedResume(Base):
     __tablename__ = "optimized_resumes"
