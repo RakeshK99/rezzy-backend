@@ -60,7 +60,7 @@ class UserService:
                     self.db.commit()
                     return existing_email_user
             
-            # Create new user
+            # Create new user and usage record in a single transaction
             user = User(
                 id=user_id,
                 email=email,
@@ -72,10 +72,7 @@ class UserService:
                 updated_at=datetime.utcnow()
             )
             
-            self.db.add(user)
-            self.db.commit()  # Commit user first
-            
-            # Create initial usage record after user is committed
+            # Create initial usage record
             current_month = datetime.utcnow().strftime("%Y-%m")
             usage_record = UsageRecord(
                 user_id=user_id,
@@ -85,6 +82,8 @@ class UserService:
                 interview_questions_generated=0
             )
             
+            # Add both to session and commit together
+            self.db.add(user)
             self.db.add(usage_record)
             self.db.commit()
             
