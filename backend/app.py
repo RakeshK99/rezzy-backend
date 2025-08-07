@@ -49,7 +49,20 @@ print(f"📦 Environment: {os.getenv('ENVIRONMENT', 'development')}")
 print(f"🔧 Debug mode: {os.getenv('DEBUG', 'false')}")
 
 # Allow CORS from frontend
-cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+cors_origins = [
+    "http://localhost:3000",
+    "https://82763b4a.vercel.app",
+    "https://rezzy-frontend.vercel.app",
+    "https://rezzy.vercel.app"
+]
+
+# Add any additional origins from environment variable
+env_cors_origins = os.getenv("CORS_ORIGINS", "").split(",")
+if env_cors_origins and env_cors_origins[0]:  # Only add if not empty
+    cors_origins.extend(env_cors_origins)
+
+print(f"🌐 CORS Origins: {cors_origins}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -57,6 +70,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@router.options("/api/{path:path}")
+async def options_handler():
+    """Handle preflight CORS requests"""
+    return {"message": "OK"}
 
 @router.get("/api/get-plan")
 def get_user_plan(user_id: str, db: Session = Depends(get_db)):
@@ -626,6 +644,16 @@ async def get_resume_analysis(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/api/test-connection")
+async def test_connection():
+    """Test endpoint to verify connectivity and CORS"""
+    return {
+        "success": True,
+        "message": "Connection successful",
+        "timestamp": datetime.utcnow().isoformat(),
+        "cors_origins": cors_origins
+    }
 
 @router.get("/api/health")
 def health_check():
