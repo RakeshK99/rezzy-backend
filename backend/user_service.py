@@ -37,6 +37,7 @@ class UserService:
                     existing_email_user.middle_name = middle_name
                     existing_email_user.last_name = last_name
                     existing_email_user.updated_at = datetime.utcnow()
+                    self.db.commit()
                     
                     # Create new usage record for the new user ID
                     current_month = datetime.utcnow().strftime("%Y-%m")
@@ -72,8 +73,9 @@ class UserService:
             )
             
             self.db.add(user)
+            self.db.commit()  # Commit user first
             
-            # Create initial usage record
+            # Create initial usage record after user is committed
             current_month = datetime.utcnow().strftime("%Y-%m")
             usage_record = UsageRecord(
                 user_id=user_id,
