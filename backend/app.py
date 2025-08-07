@@ -962,7 +962,7 @@ async def generate_optimized_resume(
         
         # Get user's current resume
         if not user.current_resume_id:
-            raise HTTPException(status_code=400, detail="No resume uploaded. Please upload a resume first.")
+            raise HTTPException(status_code=400, detail="No resume uploaded. Please go to your Profile section to upload your resume first.")
         
         resume_file = user_service.db.query(UserFile).filter(UserFile.id == user.current_resume_id).first()
         if not resume_file:
