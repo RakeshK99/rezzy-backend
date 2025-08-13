@@ -60,7 +60,7 @@ class UserService:
                     self.db.commit()
                     return existing_email_user
             
-            # Create new user and usage record in a single transaction
+            # Create new user first
             user = User(
                 id=user_id,
                 email=email,
@@ -72,20 +72,28 @@ class UserService:
                 updated_at=datetime.utcnow()
             )
             
-            # Create initial usage record
-            current_month = datetime.utcnow().strftime("%Y-%m")
-            usage_record = UsageRecord(
-                user_id=user_id,
-                month=current_month,
-                scans_used=0,
-                cover_letters_generated=0,
-                interview_questions_generated=0
-            )
-            
-            # Add both to session and commit together
+            # Add user to session and commit
             self.db.add(user)
-            self.db.add(usage_record)
             self.db.commit()
+            self.db.refresh(user)
+            
+            # Now create usage record after user is committed
+            try:
+                current_month = datetime.utcnow().strftime("%Y-%m")
+                usage_record = UsageRecord(
+                    user_id=user_id,
+                    month=current_month,
+                    scans_used=0,
+                    cover_letters_generated=0,
+                    interview_questions_generated=0
+                )
+                
+                self.db.add(usage_record)
+                self.db.commit()
+            except Exception as usage_error:
+                # If usage record creation fails, log it but don't fail the user creation
+                print(f"Warning: Could not create usage record for user {user_id}: {usage_error}")
+                # Don't rollback the user creation
             
             return user
             

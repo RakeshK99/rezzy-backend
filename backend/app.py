@@ -647,13 +647,24 @@ async def get_resume_analysis(
 
 @router.get("/api/test-connection")
 async def test_connection():
-    """Test endpoint to verify connectivity and CORS"""
-    return {
-        "success": True,
-        "message": "Connection successful",
-        "timestamp": datetime.utcnow().isoformat(),
-        "cors_origins": cors_origins
-    }
+    """Test endpoint to verify backend connectivity"""
+    return {"status": "ok", "message": "Backend is running", "timestamp": datetime.utcnow().isoformat()}
+
+@router.post("/api/test-user-creation")
+async def test_user_creation(
+    user_id: str = Form(...),
+    email: str = Form(...),
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Test endpoint to verify user creation works"""
+    try:
+        user_service = UserService(db)
+        user = user_service.create_user(user_id, email, first_name, "", last_name)
+        return {"success": True, "user_id": user.id, "message": "User created successfully"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 @router.get("/api/health")
 def health_check():
